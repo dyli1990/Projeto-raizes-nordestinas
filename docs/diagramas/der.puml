@@ -1,0 +1,209 @@
+@startuml der
+' DER compatível com prisma/schema.prisma (SQLite). Notação pé-de-galinha.
+hide circle
+skinparam linetype ortho
+skinparam shadowing false
+skinparam defaultFontName Arial
+skinparam defaultFontSize 11
+skinparam class {
+  BackgroundColor #FFFDF7
+  BorderColor #8B5A2B
+  HeaderBackgroundColor #F3E2C7
+}
+
+entity "unidades" as unidades {
+  * id : INTEGER <<PK>>
+  --
+  * nome : TEXT
+  * cidade : TEXT
+  * uf : TEXT
+  * endereco : TEXT
+  * ativa : BOOLEAN
+  * createdAt, updatedAt : DATETIME
+}
+
+entity "usuarios" as usuarios {
+  * id : INTEGER <<PK>>
+  --
+  * nome : TEXT
+  * email : TEXT <<UNIQUE>>
+  * senhaHash : TEXT (bcrypt)
+  telefone : TEXT
+  * perfil : ENUM(ADMIN, GERENTE, ATENDENTE, COZINHA, CLIENTE)
+  unidadeId : INTEGER <<FK>>
+  * ativo : BOOLEAN
+  anonimizadoEm : DATETIME
+  * createdAt, updatedAt : DATETIME
+}
+
+entity "consentimentos" as consentimentos {
+  * id : INTEGER <<PK>>
+  --
+  * usuarioId : INTEGER <<FK>>
+  * tipo : ENUM(FIDELIDADE, MARKETING)
+  * concedido : BOOLEAN
+  * versaoTermo : TEXT
+  canal : TEXT
+  * createdAt : DATETIME
+}
+
+entity "produtos" as produtos {
+  * id : INTEGER <<PK>>
+  --
+  * nome : TEXT
+  descricao : TEXT
+  * categoria : TEXT
+  * precoBaseCentavos : INTEGER
+  * ativo : BOOLEAN
+}
+
+entity "itens_cardapio" as cardapio {
+  * id : INTEGER <<PK>>
+  --
+  * unidadeId : INTEGER <<FK>>
+  * produtoId : INTEGER <<FK>>
+  * precoCentavos : INTEGER
+  * disponivel : BOOLEAN
+  ..
+  UNIQUE(unidadeId, produtoId)
+}
+
+entity "estoques" as estoques {
+  * id : INTEGER <<PK>>
+  --
+  * unidadeId : INTEGER <<FK>>
+  * produtoId : INTEGER <<FK>>
+  * quantidade : INTEGER (>= 0)
+  ..
+  UNIQUE(unidadeId, produtoId)
+}
+
+entity "movimentacoes_estoque" as movimentacoes {
+  * id : INTEGER <<PK>>
+  --
+  * estoqueId : INTEGER <<FK>>
+  * tipo : ENUM(ENTRADA, SAIDA)
+  * origem : ENUM(MANUAL, PEDIDO, CANCELAMENTO)
+  * quantidade : INTEGER
+  * saldoApos : INTEGER
+  * motivo : TEXT
+  pedidoId : INTEGER <<FK>>
+  usuarioId : INTEGER <<FK>>
+  * createdAt : DATETIME
+}
+
+entity "promocoes" as promocoes {
+  * id : INTEGER <<PK>>
+  --
+  * codigo : TEXT <<UNIQUE>>
+  * descricao : TEXT
+  * tipoDesconto : ENUM(PERCENTUAL, VALOR_FIXO)
+  * valor : INTEGER
+  unidadeId : INTEGER <<FK>> (nulo = rede)
+  * inicio, fim : DATETIME
+  * ativa : BOOLEAN
+}
+
+entity "pedidos" as pedidos {
+  * id : INTEGER <<PK>>
+  --
+  * unidadeId : INTEGER <<FK>>
+  clienteId : INTEGER <<FK>>
+  operadorId : INTEGER <<FK>>
+  * canalPedido : ENUM(APP, TOTEM, BALCAO, PICKUP, WEB)
+  * status : ENUM(AGUARDANDO_PAGAMENTO, EM_PREPARO,\n  PRONTO, ENTREGUE, CANCELADO)
+  * subtotalCentavos : INTEGER
+  * descontoCentavos : INTEGER
+  * totalCentavos : INTEGER
+  promocaoId : INTEGER <<FK>>
+  * pontosResgatados : INTEGER
+  observacao : TEXT
+  * createdAt, updatedAt : DATETIME
+}
+
+entity "itens_pedido" as itens {
+  * id : INTEGER <<PK>>
+  --
+  * pedidoId : INTEGER <<FK>>
+  * produtoId : INTEGER <<FK>>
+  * nomeProduto : TEXT
+  * quantidade : INTEGER
+  * precoUnitarioCentavos : INTEGER
+  * subtotalCentavos : INTEGER
+}
+
+entity "historico_status_pedido" as historico {
+  * id : INTEGER <<PK>>
+  --
+  * pedidoId : INTEGER <<FK>>
+  statusAnterior : ENUM
+  * statusNovo : ENUM
+  motivo : TEXT
+  usuarioId : INTEGER <<FK>>
+  * createdAt : DATETIME
+}
+
+entity "pagamentos" as pagamentos {
+  * id : INTEGER <<PK>>
+  --
+  * pedidoId : INTEGER <<FK>>
+  * metodo : ENUM(PIX, CARTAO_CREDITO,\n  CARTAO_DEBITO, DINHEIRO)
+  * status : ENUM(PENDENTE, APROVADO, RECUSADO,\n  ERRO, ESTORNADO)
+  * valorCentavos : INTEGER
+  * idempotencyKey : TEXT <<UNIQUE>>
+  transacaoExternaId : TEXT
+  motivoRecusa : TEXT
+  * tentativasGateway : INTEGER
+  respostaGateway : TEXT (JSON)
+}
+
+entity "contas_fidelidade" as contas {
+  * id : INTEGER <<PK>>
+  --
+  * usuarioId : INTEGER <<FK>> <<UNIQUE>>
+  * saldoPontos : INTEGER
+}
+
+entity "transacoes_fidelidade" as transacoes {
+  * id : INTEGER <<PK>>
+  --
+  * contaId : INTEGER <<FK>>
+  * tipo : ENUM(ACUMULO, RESGATE, ESTORNO)
+  * pontos : INTEGER
+  * descricao : TEXT
+  pedidoId : INTEGER <<FK>>
+}
+
+entity "logs_auditoria" as logs {
+  * id : INTEGER <<PK>>
+  --
+  usuarioId : INTEGER <<FK>>
+  * acao : TEXT
+  * entidade : TEXT
+  entidadeId : TEXT
+  detalhes : TEXT (JSON mascarado)
+  ip, requestId : TEXT
+  * createdAt : DATETIME
+}
+
+unidades ||--o{ usuarios : "lota (equipe)"
+usuarios ||--o{ consentimentos : registra
+unidades ||--o{ cardapio : oferece
+produtos ||--o{ cardapio : "é vendido em"
+unidades ||--o{ estoques : "possui estoque próprio"
+produtos ||--o{ estoques : ""
+estoques ||--o{ movimentacoes : ""
+unidades |o--o{ promocoes : ""
+unidades ||--o{ pedidos : recebe
+usuarios |o--o{ pedidos : "cliente / operador"
+promocoes |o--o{ pedidos : aplica
+pedidos ||--|{ itens : contém
+produtos ||--o{ itens : ""
+pedidos ||--|{ historico : rastreia
+pedidos ||--o{ pagamentos : "tentativas (desacoplado)"
+pedidos |o--o{ movimentacoes : origina
+usuarios ||--o| contas : participa
+contas ||--o{ transacoes : extrato
+pedidos |o--o{ transacoes : ""
+usuarios |o--o{ logs : executa
+@enduml

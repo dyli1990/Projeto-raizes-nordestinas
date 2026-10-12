@@ -1,0 +1,28 @@
+# Dependências
+node_modules/
+
+# Variáveis de ambiente (nunca versionar segredos)
+.env
+.env.*
+!.env.example
+
+# Bancos SQLite locais
+prisma/*.db
+prisma/*.db-journal
+
+# Relatórios gerados localmente
+newman/
+coverage/
+
+# Material de entrega acadêmica (gerado fora do repositório)
+entrega/
+
+# Sistema / editores
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.log
+
+# Relatório bruto do Newman (contém tokens efêmeros de teste)
+docs/evidencias/newman-report.json

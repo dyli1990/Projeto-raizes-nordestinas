@@ -1,0 +1,21 @@
+@startuml estados-pedido
+skinparam shadowing false
+skinparam defaultFontName Arial
+skinparam state {
+  BackgroundColor #FFF8E7
+  BorderColor #8B5A2B
+}
+
+[*] --> AGUARDANDO_PAGAMENTO : POST /pedidos\n(estoque reservado)
+AGUARDANDO_PAGAMENTO --> AGUARDANDO_PAGAMENTO : pagamento RECUSADO\nou gateway indisponível
+AGUARDANDO_PAGAMENTO --> EM_PREPARO : pagamento APROVADO\n(gateway mock)
+AGUARDANDO_PAGAMENTO --> CANCELADO : CLIENTE dono, ATENDENTE,\nGERENTE ou ADMIN\n(devolve estoque e pontos)
+EM_PREPARO --> PRONTO : COZINHA, GERENTE, ADMIN
+EM_PREPARO --> CANCELADO : GERENTE ou ADMIN\n(estorna pagamento)
+PRONTO --> ENTREGUE : ATENDENTE, GERENTE, ADMIN
+ENTREGUE --> [*]
+CANCELADO --> [*]
+
+state EM_PREPARO : na cozinha
+state PRONTO : aguardando retirada/entrega
+@enduml

@@ -1,0 +1,71 @@
+@startuml arquitetura
+skinparam shadowing false
+skinparam defaultFontName Arial
+skinparam defaultFontSize 11
+skinparam package {
+  BackgroundColor #FFFDF7
+  BorderColor #8B5A2B
+}
+skinparam component {
+  BackgroundColor #FFF8E7
+  BorderColor #8B5A2B
+}
+
+actor "App / Totem / Web /\nBalcão / Cozinha" as Canais
+
+package "API (src/api)" {
+  [routes] as R
+  [middlewares\nautenticar · autorizar · validar\nrate limit · erro padrão · requestId] as MW
+  [controllers] as CT
+  [presenters (DTO)] as PR
+  [OpenAPI / Swagger UI] as SW
+}
+
+package "Application (src/application)" {
+  [pedidos.service] as PS
+  [pagamentos.service] as PGS
+  [estoque · unidades · produtos\npromocoes · fidelidade] as OS
+  [auth · usuarios · privacidade (LGPD)] as AS
+  [auditoria.service] as AU
+}
+
+package "Domain (src/domain)" {
+  [regras do pedido\n(máquina de status, canais)] as DP
+  [fidelidade · promoção\nacesso por unidade · privacidade] as DR
+  [enums · erros de domínio · dinheiro] as DE
+}
+
+package "Infrastructure (src/infrastructure)" {
+  [repositories (Prisma)] as REPO
+  [payment\nMock + Resilient gateway] as PAY
+  [security\nbcrypt · JWT] as SEC
+  [logging (JSON)] as LOG
+}
+
+database "SQLite\n(migrations Prisma)" as DB
+cloud "Gateway de pagamento\n(simulado)" as EXT
+
+Canais --> R : HTTP/JSON
+R --> MW
+MW --> CT
+CT --> PR
+CT --> PS
+CT --> PGS
+CT --> OS
+CT --> AS
+PS --> DP
+PGS --> DP
+OS --> DR
+PS --> AU
+PGS --> AU
+PS --> REPO
+PGS --> REPO
+PGS --> PAY
+AS --> SEC
+OS --> REPO
+AU --> REPO
+REPO --> DB
+PAY ..> EXT
+DP --> DE
+DR --> DE
+@enduml

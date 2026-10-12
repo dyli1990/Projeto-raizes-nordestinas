@@ -1,0 +1,70 @@
+@startuml sequencia-pedido-pagamento
+' Fluxo crítico: Pedido -> Pagamento externo (mock) -> Atualização de status
+skinparam shadowing false
+skinparam defaultFontName Arial
+skinparam defaultFontSize 11
+skinparam sequence {
+  ParticipantBackgroundColor #FFF8E7
+  ParticipantBorderColor #8B5A2B
+  LifeLineBorderColor #8B5A2B
+}
+autonumber
+
+actor "Cliente\n(App/Totem/Web)" as C
+participant "API\n(Controllers +\nmiddlewares)" as API
+participant "PedidosService" as PS
+participant "PagamentosService" as PG
+participant "ResilientPaymentGateway\n+ MockPaymentGateway" as GW
+database "Banco\n(SQLite/Prisma)" as DB
+actor "Cozinha" as K
+
+== 1. Criar pedido ==
+C -> API : POST /pedidos {unidadeId, canalPedido, itens}\nAuthorization: Bearer JWT
+API -> API : autenticar + autorizar(CLIENTE)\nvalidar corpo (Zod)
+API -> PS : criarPedido(ator, dados)
+PS -> DB : cardápio da unidade (preços)
+PS -> PS : promoção / resgate de pontos
+PS -> DB : BEGIN
+loop para cada item
+  PS -> DB : UPDATE estoques SET quantidade -= q\nWHERE quantidade >= q
+end
+alt algum item sem saldo
+  PS -> DB : ROLLBACK
+  API --> C : 409 ESTOQUE_INSUFICIENTE
+else estoque reservado
+  PS -> DB : INSERT pedido (AGUARDANDO_PAGAMENTO), itens,\nmovimentações, histórico, auditoria
+  PS -> DB : COMMIT
+  API --> C : 201 Created + pedido
+end
+
+== 2. Solicitar pagamento ==
+C -> API : POST /pagamentos {pedidoId, metodo, tokenPagamento}\nIdempotency-Key: <uuid>
+API -> PG : solicitarPagamento(...)
+PG -> DB : chave já usada?
+alt reenvio com a mesma chave
+  API --> C : 200 OK + Idempotent-Replayed: true
+else nova tentativa
+  PG -> DB : INSERT pagamento (PENDENTE)
+  PG -> GW : autorizar(valor, metodo, token)
+  note right of GW : timeout por chamada e\naté 2 novas tentativas\n(backoff exponencial)
+  alt APROVADO
+    GW --> PG : {status: APROVADO, transacaoId}
+    PG -> DB : BEGIN; pedido -> EM_PREPARO (se ainda aguardando);\npagamento APROVADO; histórico; pontos; auditoria; COMMIT
+    API --> C : 201 {status: APROVADO, pedido.status: EM_PREPARO}
+  else RECUSADO
+    GW --> PG : {status: RECUSADO, motivo}
+    PG -> DB : pagamento RECUSADO + auditoria
+    API --> C : 201 {status: RECUSADO, pedido.status: AGUARDANDO_PAGAMENTO}
+  else gateway indisponível
+    GW --> PG : erro após novas tentativas
+    PG -> DB : pagamento ERRO + auditoria
+    API --> C : 503 GATEWAY_PAGAMENTO_INDISPONIVEL
+  end
+end
+
+== 3. Produção e entrega ==
+K -> API : PATCH /pedidos/{id}/status {status: PRONTO}
+API -> PS : atualizarStatus (regra: COZINHA pode EM_PREPARO -> PRONTO)
+PS -> DB : UPDATE ... WHERE status = 'EM_PREPARO'; histórico; auditoria
+API --> K : 200 {status: PRONTO}
+@enduml

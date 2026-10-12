@@ -1,0 +1,200 @@
+@startuml classes
+' Visão de domínio: entidades, enums e o contrato do gateway de pagamento.
+skinparam shadowing false
+skinparam defaultFontName Arial
+skinparam defaultFontSize 11
+skinparam class {
+  BackgroundColor #FFFDF7
+  BorderColor #8B5A2B
+  HeaderBackgroundColor #F3E2C7
+}
+hide empty members
+
+package "Domínio" {
+  class Unidade {
+    id: int
+    nome: string
+    cidade: string
+    uf: string
+    ativa: boolean
+  }
+
+  class Usuario {
+    id: int
+    nome: string
+    email: string
+    senhaHash: string
+    perfil: Perfil
+    unidadeId: int?
+    ativo: boolean
+    --
+    anonimizar()
+  }
+
+  class Consentimento {
+    tipo: TipoConsentimento
+    concedido: boolean
+    versaoTermo: string
+    data: datetime
+  }
+
+  class Produto {
+    id: int
+    nome: string
+    categoria: string
+    precoBase: Dinheiro
+    ativo: boolean
+  }
+
+  class ItemCardapio {
+    preco: Dinheiro
+    disponivel: boolean
+  }
+
+  class Estoque {
+    quantidade: int
+    --
+    baixarSeDisponivel(qtd): boolean
+    repor(qtd)
+  }
+
+  class MovimentacaoEstoque {
+    tipo: ENTRADA | SAIDA
+    origem: MANUAL | PEDIDO | CANCELAMENTO
+    quantidade: int
+    saldoApos: int
+  }
+
+  class Pedido {
+    id: int
+    canalPedido: CanalPedido
+    status: StatusPedido
+    subtotal: Dinheiro
+    desconto: Dinheiro
+    total: Dinheiro
+    pontosResgatados: int
+    --
+    calcularSubtotal()
+    validarTransicao(novo, perfil)
+    confirmarPagamento()
+    cancelar(motivo)
+  }
+
+  class ItemPedido {
+    nomeProduto: string
+    quantidade: int
+    precoUnitario: Dinheiro
+    subtotal: Dinheiro
+  }
+
+  class HistoricoStatus {
+    statusAnterior: StatusPedido
+    statusNovo: StatusPedido
+    motivo: string
+    data: datetime
+  }
+
+  class Pagamento {
+    metodo: MetodoPagamento
+    status: StatusPagamento
+    valor: Dinheiro
+    idempotencyKey: string
+    transacaoExternaId: string
+    tentativasGateway: int
+  }
+
+  class Promocao {
+    codigo: string
+    tipoDesconto: PERCENTUAL | VALOR_FIXO
+    valor: int
+    inicio: datetime
+    fim: datetime
+    --
+    validar(unidade, data)
+    calcularDesconto(subtotal): Dinheiro
+  }
+
+  class ContaFidelidade {
+    saldoPontos: int
+    --
+    acumular(valorPago)
+    resgatar(pontos): Dinheiro
+  }
+
+  class TransacaoFidelidade {
+    tipo: ACUMULO | RESGATE | ESTORNO
+    pontos: int
+  }
+
+  enum Perfil {
+    ADMIN
+    GERENTE
+    ATENDENTE
+    COZINHA
+    CLIENTE
+  }
+
+  enum CanalPedido {
+    APP
+    TOTEM
+    BALCAO
+    PICKUP
+    WEB
+  }
+
+  enum StatusPedido {
+    AGUARDANDO_PAGAMENTO
+    EM_PREPARO
+    PRONTO
+    ENTREGUE
+    CANCELADO
+  }
+
+  enum StatusPagamento {
+    PENDENTE
+    APROVADO
+    RECUSADO
+    ERRO
+    ESTORNADO
+  }
+}
+
+package "Infraestrutura (integração)" {
+  interface GatewayPagamento {
+    autorizar(referencia, valor, metodo, token)
+    estornar(transacaoId, valor)
+  }
+  class MockPaymentGateway
+  class ResilientPaymentGateway {
+    timeoutMs
+    maxRetries
+  }
+}
+
+Unidade "1" o-- "0..*" Usuario : equipe
+Usuario "1" *-- "0..*" Consentimento
+Unidade "1" *-- "0..*" ItemCardapio
+Produto "1" -- "0..*" ItemCardapio
+Unidade "1" *-- "0..*" Estoque
+Produto "1" -- "0..*" Estoque
+Estoque "1" *-- "0..*" MovimentacaoEstoque
+Unidade "1" -- "0..*" Pedido
+Usuario "0..1" -- "0..*" Pedido : cliente
+Pedido "1" *-- "1..*" ItemPedido
+ItemPedido "0..*" --> "1" Produto
+Pedido "1" *-- "1..*" HistoricoStatus
+Pedido "1" -- "0..*" Pagamento
+Pedido "0..*" --> "0..1" Promocao
+Usuario "1" -- "0..1" ContaFidelidade
+ContaFidelidade "1" *-- "0..*" TransacaoFidelidade
+
+Pedido ..> CanalPedido
+Pedido ..> StatusPedido
+Pagamento ..> StatusPagamento
+Usuario ..> Perfil
+
+MockPaymentGateway ..|> GatewayPagamento
+ResilientPaymentGateway ..|> GatewayPagamento
+ResilientPaymentGateway o--> GatewayPagamento : decora
+Pagamento ..> GatewayPagamento : solicitado via
+@enduml

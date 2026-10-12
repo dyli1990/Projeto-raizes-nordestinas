@@ -1,0 +1,79 @@
+@startuml casos-de-uso
+left to right direction
+skinparam shadowing false
+skinparam defaultFontName Arial
+skinparam usecase {
+  BackgroundColor #FFF8E7
+  BorderColor #8B5A2B
+}
+skinparam actor {
+  BorderColor #5A3A1A
+}
+skinparam rectangle {
+  BorderColor #5A3A1A
+}
+
+actor "Cliente\n(App / Web / Totem / Pickup)" as Cliente
+actor "Atendente\n(Balcão)" as Atendente
+actor "Cozinha" as Cozinha
+actor "Gerente /\nAdministrador" as Gestor
+actor "Gateway de Pagamento\n<<sistema externo>>" as Gateway
+actor "Colaborador\n(equipe da unidade)" as Equipe
+
+rectangle "API Raízes do Nordeste" {
+  usecase "UC01 Cadastrar-se e registrar\nconsentimentos (LGPD)" as UC01
+  usecase "UC02 Autenticar\n(login JWT)" as UC02
+  usecase "UC03 Consultar cardápio\nda unidade" as UC03
+  usecase "UC04 Realizar pedido\n(informando canalPedido)" as UC04
+  usecase "UC05 Solicitar pagamento" as UC05
+  usecase "UC06 Aplicar promoção\n(cupom)" as UC06
+  usecase "UC07 Resgatar pontos\nde fidelidade" as UC07
+  usecase "UC08 Acompanhar pedido\ne histórico de status" as UC08
+  usecase "UC09 Atualizar status\n(preparo → pronto → entregue)" as UC09
+  usecase "UC10 Cancelar pedido" as UC10
+  usecase "UC11 Movimentar e consultar\nestoque da unidade" as UC11
+  usecase "UC12 Gerir catálogo, cardápio\ne promoções" as UC12
+  usecase "UC13 Consultar trilha\nde auditoria" as UC13
+  usecase "UC14 Exportar ou excluir\nmeus dados (LGPD)" as UC14
+  usecase "Validar itens e\nbaixar estoque" as INC1
+  usecase "Registrar auditoria" as INC2
+  usecase "Estornar pagamento" as INC3
+}
+
+Cliente --> UC01
+Cliente --> UC02
+Cliente --> UC03
+Cliente --> UC04
+Cliente --> UC05
+Cliente --> UC08
+Cliente --> UC10
+Cliente --> UC14
+
+Equipe <|-- Atendente
+Equipe <|-- Cozinha
+Equipe <|-- Gestor
+Equipe --> UC02
+Atendente --> UC04
+Atendente --> UC05
+Atendente --> UC09
+Atendente --> UC10
+
+Cozinha --> UC09
+
+Gestor --> UC09
+Gestor --> UC10
+Gestor --> UC11
+Gestor --> UC12
+Gestor --> UC13
+
+UC04 ..> INC1 : <<include>>
+UC04 ..> INC2 : <<include>>
+UC05 ..> INC2 : <<include>>
+UC09 ..> INC2 : <<include>>
+UC06 ..> UC04 : <<extend>>
+UC07 ..> UC04 : <<extend>>
+UC10 ..> INC3 : <<include>>\n(se já pago)
+
+UC05 --> Gateway : autorizar
+INC3 --> Gateway : estornar
+@enduml
